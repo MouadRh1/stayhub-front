@@ -21,7 +21,7 @@ interface Space {
   space_type: string;
   rating: number;
   review_count: number;
-  images: string[];
+  featured_image: string | null; // ✅ Corrigé : était images: string[]
 }
 
 interface Destination {
@@ -44,6 +44,36 @@ const DESTINATION_IMAGES: Record<string, string> = {
   'Provence': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600',
 };
 
+// ✅ Même fonction que SearchPage pour construire les URLs d'images
+const getImageUrl = (path: string | null): string => {
+  if (!path) return '/placeholder.jpg';
+
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  if (path.startsWith('/storage/')) {
+    return path;
+  }
+
+  if (path.startsWith('storage/')) {
+    return '/' + path;
+  }
+
+  if (path.startsWith('/uploads/')) {
+    const baseUrl = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'http://localhost:8000';
+    return `${baseUrl}${path}`;
+  }
+
+  const baseUrl = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace('/api', '')
+    : 'http://localhost:8000';
+
+  return `${baseUrl}/storage/${path}`;
+};
+
 export function HomePage() {
   const [popularSpaces, setPopularSpaces] = useState<Space[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -63,25 +93,18 @@ export function HomePage() {
       setLoading(prev => ({ ...prev, spaces: true }));
       const response = await api.get('/spaces/popular');
       console.log('Popular spaces response:', response.data);
-      
-      // Vérifier le format des données
+
       let data = response.data;
       if (!Array.isArray(data)) {
         data = data.data || [];
       }
-      
+
       setPopularSpaces(data);
       setError(null);
     } catch (err: any) {
       console.error('Erreur détaillée:', err);
-      console.error('Response:', err.response);
-      console.error('Data:', err.response?.data);
-      
-      // Message d'erreur plus précis
       const errorMessage = err.response?.data?.message || err.message || 'Impossible de charger les logements populaires';
       setError(errorMessage);
-      
-      // Ne pas bloquer l'affichage des destinations si les espaces populaires échouent
       setPopularSpaces([]);
     } finally {
       setLoading(prev => ({ ...prev, spaces: false }));
@@ -93,19 +116,17 @@ export function HomePage() {
       setLoading(prev => ({ ...prev, destinations: true }));
       const response = await api.get('/spaces/trending-destinations');
       console.log('Destinations response:', response.data);
-      
-      // Vérifier le format des données
+
       let data = response.data;
       if (!Array.isArray(data)) {
         data = data.data || [];
       }
-      
-      // Ajouter les images si manquantes
+
       data = data.map((dest: Destination) => ({
         ...dest,
         image: dest.image || DESTINATION_IMAGES[dest.name] || `https://picsum.photos/seed/${dest.name}/600/400`
       }));
-      
+
       setDestinations(data);
       setError(null);
     } catch (err) {
@@ -117,7 +138,6 @@ export function HomePage() {
     }
   };
 
-  // Fonction pour obtenir une image de destination
   const getDestinationImage = (name: string): string => {
     return DESTINATION_IMAGES[name] || `https://picsum.photos/seed/${name}/600/400`;
   };
@@ -147,7 +167,7 @@ export function HomePage() {
         ) : error && popularSpaces.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">{error}</p>
-            <button 
+            <button
               onClick={fetchPopularSpaces}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
             >
@@ -164,7 +184,7 @@ export function HomePage() {
               <PropertyCard
                 key={space.id}
                 id={space.id}
-                image={space.images?.[0] || '/placeholder.jpg'}
+                image={getImageUrl(space.featured_image)} // ✅ Corrigé
                 title={space.title}
                 location={space.location}
                 price={space.price_per_night}

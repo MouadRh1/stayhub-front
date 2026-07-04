@@ -1,15 +1,30 @@
 // pages/SpaceDetailPage.tsx
-import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router';
-import { 
-  Star, MapPin, Wifi, Car, Waves, Utensils, Wind, 
-  Heart, Share2, ChevronLeft, ChevronRight, Users, 
-  BedDouble, Bath, Home, Loader2, AlertCircle 
-} from 'lucide-react';
-import { api } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { useState, useEffect, useCallback } from "react";
+import { useParams, Link, useNavigate } from "react-router";
+import {
+  Star,
+  MapPin,
+  Wifi,
+  Car,
+  Waves,
+  Utensils,
+  Wind,
+  Heart,
+  Share2,
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  Home,
+  Loader2,
+  AlertCircle,
+  Image as ImageIcon,
+  X,
+  Grid3x3,
+} from "lucide-react";
+import { api } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 interface SpaceImage {
   id: string;
@@ -34,6 +49,7 @@ interface Space {
   rating: number;
   review_count: number;
   status: string;
+  featured_image: string | null;
   user: {
     id: string;
     name: string;
@@ -54,85 +70,107 @@ interface Space {
 }
 
 const AMENITY_ICONS: { [key: string]: any } = {
-  'WiFi': Wifi,
-  'Piscine': Waves,
-  'Parking': Car,
-  'Cuisine': Utensils,
-  'Climatisation': Wind,
-  'Jacuzzi': Waves,
-  'Barbecue': Home,
-  'Cheminée': Home,
-  'Sauna': Wind,
-  'Salle de sport': Users,
-  'Balcon': Home,
-  'Terrasse': Home,
-  'Lave-linge': Home,
-  'Télévision': Home,
+  WiFi: Wifi,
+  Piscine: Waves,
+  Parking: Car,
+  Cuisine: Utensils,
+  Climatisation: Wind,
+  Jacuzzi: Waves,
+  Barbecue: Home,
+  Cheminée: Home,
+  Sauna: Wind,
+  "Salle de sport": Users,
+  Balcon: Home,
+  Terrasse: Home,
+  "Lave-linge": Home,
+  Télévision: Home,
+};
+
+const PLACEHOLDER_IMAGE = "/images/placeholder-space.jpg";
+
+// L'API renvoie déjà des URLs absolues (asset()) pour featured_image et
+// images[].image_path grâce aux accesseurs Laravel. On ne fait que gérer
+// les cas où un chemin relatif brut nous parviendrait quand même.
+const resolveImageUrl = (path: string | null | undefined): string => {
+  if (!path) return PLACEHOLDER_IMAGE;
+
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+
+  const baseUrl = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace("/api", "")
+    : "http://localhost:8000";
+
+  if (path.startsWith("/")) {
+    return `${baseUrl}${path}`;
+  }
+
+  return `${baseUrl}/${path}`;
 };
 
 export function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const [space, setSpace] = useState<Space | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(2);
   const [bookingLoading, setBookingLoading] = useState(false);
 
-  // Récupérer les données
   useEffect(() => {
     if (id) {
       fetchSpaceDetails();
+      setCurrentImageIndex(0); // reset gallery position when navigating between spaces
     }
   }, [id]);
 
-  // Vérifier les favoris quand l'utilisateur change
   useEffect(() => {
     if (user && id) {
       checkFavorite();
     }
   }, [user, id]);
 
-  // Récupérer les détails de l'espace
   const fetchSpaceDetails = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await api.get(`/spaces/${id}`);
-      console.log('Space data:', response.data);
       setSpace(response.data);
     } catch (err: any) {
-      console.error('Erreur:', err);
+      console.error("Erreur:", err);
       if (err.response?.status === 404) {
-        setError('Espace non trouvé');
+        setError("Espace non trouvé");
       } else {
-        setError(err.response?.data?.message || 'Erreur lors du chargement des détails');
+        setError(
+          err.response?.data?.message ||
+            "Erreur lors du chargement des détails",
+        );
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // Vérifier si l'espace est en favori
   const checkFavorite = async () => {
     try {
       const response = await api.get(`/favorites/${id}/check`);
       setIsFavorite(response.data.is_favorite);
     } catch (err) {
-      console.error('Erreur:', err);
+      console.error("Erreur:", err);
     }
   };
 
-  // Ajouter/Retirer des favoris
   const toggleFavorite = async () => {
     if (!user) {
-      navigate('/login');
+      navigate("/login");
       return;
     }
 
@@ -140,58 +178,101 @@ export function SpaceDetailPage() {
       const response = await api.post(`/favorites/${id}/toggle`);
       setIsFavorite(response.data.is_favorite);
     } catch (err) {
-      console.error('Erreur:', err);
+      console.error("Erreur:", err);
     }
   };
 
-  // Réserver - Rediriger vers la page de réservation
   const handleBooking = () => {
     if (!user) {
-      navigate('/login');
+      navigate("/login");
       return;
     }
 
     if (!checkIn || !checkOut) {
-      alert('Veuillez sélectionner les dates');
+      alert("Veuillez sélectionner les dates");
       return;
     }
 
-    // Rediriger vers la page de réservation avec les paramètres
     navigate(`/reservation/${id}`, {
       state: {
         checkIn,
         checkOut,
         guests,
-      }
+      },
     });
   };
 
-  // Navigation des images
+  // Images, triées par `order` et avec l'image principale en premier.
+  // Si le backend ne renvoie pas de galerie, on retombe sur featured_image seule.
+  const getImages = useCallback((): SpaceImage[] => {
+    if (!space) return [];
+
+    if (space.images && space.images.length > 0) {
+      return [...space.images]
+        .sort((a, b) => {
+          if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+          return a.order - b.order;
+        })
+        .map((img) => ({ ...img, image_path: resolveImageUrl(img.image_path) }));
+    }
+
+    if (space.featured_image) {
+      return [
+        {
+          id: "primary",
+          image_path: resolveImageUrl(space.featured_image),
+          is_primary: true,
+          order: 0,
+        },
+      ];
+    }
+
+    return [];
+  }, [space]);
+
+  const images = getImages();
+
   const nextImage = () => {
-    if (space?.images?.length) {
-      setCurrentImageIndex((prev) => (prev + 1) % space.images.length);
+    if (images.length > 0) {
+      setCurrentImageIndex((prev) => (prev + 1) % images.length);
     }
   };
 
   const prevImage = () => {
-    if (space?.images?.length) {
-      setCurrentImageIndex((prev) => (prev - 1 + space.images.length) % space.images.length);
+    if (images.length > 0) {
+      setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
     }
   };
 
-  // Calcul du nombre de nuits
+  // Keyboard navigation when the lightbox is open
+  useEffect(() => {
+    if (!lightboxOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") nextImage();
+      if (e.key === "ArrowLeft") prevImage();
+      if (e.key === "Escape") setLightboxOpen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxOpen, images.length]);
+
   const calculateNights = () => {
     if (checkIn && checkOut) {
       const start = new Date(checkIn);
       const end = new Date(checkOut);
-      return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      return Math.ceil(
+        (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+      );
     }
     return 0;
   };
 
   const nights = calculateNights();
   const subtotal = space ? space.price_per_night * nights : 0;
-  const serviceFee = subtotal * 0.10;
+  const serviceFee = subtotal * 0.1;
   const totalPrice = subtotal + serviceFee;
 
   if (loading) {
@@ -206,16 +287,22 @@ export function SpaceDetailPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">{error || 'Espace non trouvé'}</h2>
-        <p className="text-muted-foreground mb-4">L'espace que vous recherchez n'existe pas ou a été supprimé.</p>
-        <Link to="/search" className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
+        <h2 className="text-2xl font-bold mb-2">
+          {error || "Espace non trouvé"}
+        </h2>
+        <p className="text-muted-foreground mb-4">
+          L'espace que vous recherchez n'existe pas ou a été supprimé.
+        </p>
+        <Link
+          to="/search"
+          className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+        >
           Voir les autres espaces
         </Link>
       </div>
     );
   }
 
-  const images = space.images || [];
   const amenities = space.amenities || [];
 
   return (
@@ -223,7 +310,10 @@ export function SpaceDetailPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-6">
-          <Link to="/search" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition-colors">
+          <Link
+            to="/search"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition-colors"
+          >
             <ChevronLeft className="w-4 h-4" />
             Retour aux résultats
           </Link>
@@ -234,7 +324,9 @@ export function SpaceDetailPage() {
               <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="font-medium text-foreground">{space.rating || 'Nouveau'}</span>
+                  <span className="font-medium text-foreground">
+                    {space.rating || "Nouveau"}
+                  </span>
                   {space.review_count > 0 && (
                     <span>({space.review_count} avis)</span>
                   )}
@@ -255,15 +347,19 @@ export function SpaceDetailPage() {
                 onClick={toggleFavorite}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-accent transition-colors"
               >
-                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                <span className="hidden sm:inline">{isFavorite ? 'Retirer' : 'Sauvegarder'}</span>
+                <Heart
+                  className={`w-4 h-4 ${isFavorite ? "fill-red-500 text-red-500" : ""}`}
+                />
+                <span className="hidden sm:inline">
+                  {isFavorite ? "Retirer" : "Sauvegarder"}
+                </span>
               </button>
               <button
                 onClick={() => {
                   if (navigator.share) {
-                    navigator.share({ 
-                      title: space.title, 
-                      url: window.location.href 
+                    navigator.share({
+                      title: space.title,
+                      url: window.location.href,
                     });
                   }
                 }}
@@ -281,47 +377,136 @@ export function SpaceDetailPage() {
           {images.length > 0 ? (
             <div className="relative aspect-video">
               <img
-                src={images[currentImageIndex]?.image_path || '/placeholder.jpg'}
-                alt={space.title}
-                className="w-full h-full object-cover"
+                src={images[currentImageIndex]?.image_path || PLACEHOLDER_IMAGE}
+                alt={`${space.title} — photo ${currentImageIndex + 1}`}
+                className="w-full h-full object-cover cursor-pointer"
+                onClick={() => setLightboxOpen(true)}
                 onError={(e) => {
-                  e.currentTarget.src = '/placeholder.jpg';
+                  e.currentTarget.src = PLACEHOLDER_IMAGE;
                 }}
               />
+
               {images.length > 1 && (
                 <>
                   <button
                     onClick={prevImage}
+                    aria-label="Photo précédente"
                     className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     onClick={nextImage}
+                    aria-label="Photo suivante"
                     className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                    {images.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentImageIndex(index)}
-                        className={`w-2 h-2 rounded-full transition-colors ${
-                          index === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                        }`}
-                      />
-                    ))}
+
+                  {/* Compteur, plus lisible que des dots quand il y a beaucoup de photos */}
+                  <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-black/60 text-white text-sm rounded-lg flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    {currentImageIndex + 1} / {images.length}
                   </div>
+
+                  <button
+                    onClick={() => setLightboxOpen(true)}
+                    className="absolute bottom-4 left-4 px-3 py-1.5 bg-white/90 hover:bg-white text-foreground text-sm rounded-lg flex items-center gap-1.5 transition-colors shadow-lg"
+                  >
+                    <Grid3x3 className="w-3.5 h-3.5" />
+                    Voir toutes les photos
+                  </button>
                 </>
               )}
             </div>
           ) : (
-            <div className="aspect-video flex items-center justify-center bg-muted">
+            <div className="aspect-video flex flex-col items-center justify-center bg-muted">
+              <ImageIcon className="w-16 h-16 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">Aucune image disponible</p>
             </div>
           )}
+
+          {/* Bande de miniatures, seulement si plusieurs photos */}
+          {images.length > 1 && (
+            <div className="flex gap-2 p-3 overflow-x-auto bg-card border-t border-border">
+              {images.map((img, index) => (
+                <button
+                  key={img.id}
+                  onClick={() => setCurrentImageIndex(index)}
+                  className={`relative shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition-colors ${
+                    index === currentImageIndex
+                      ? "border-blue-600"
+                      : "border-transparent opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  <img
+                    src={img.image_path}
+                    alt={`Miniature ${index + 1}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = PLACEHOLDER_IMAGE;
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Lightbox plein écran */}
+        {lightboxOpen && images.length > 0 && (
+          <div
+            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <button
+              onClick={() => setLightboxOpen(false)}
+              aria-label="Fermer"
+              className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="absolute top-4 left-4 px-3 py-1.5 bg-white/10 text-white text-sm rounded-lg">
+              {currentImageIndex + 1} / {images.length}
+            </div>
+
+            <img
+              src={images[currentImageIndex]?.image_path}
+              alt={`${space.title} — photo ${currentImageIndex + 1}`}
+              className="max-w-[90vw] max-h-[85vh] object-contain"
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                e.currentTarget.src = PLACEHOLDER_IMAGE;
+              }}
+            />
+
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    prevImage();
+                  }}
+                  aria-label="Photo précédente"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                  aria-label="Photo suivante"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -330,20 +515,23 @@ export function SpaceDetailPage() {
             <div className="flex items-center justify-between pb-6 border-b border-border">
               <div>
                 <h2 className="text-2xl font-semibold mb-1">
-                  Hébergé par {space.user?.name || 'Hôte'}
+                  Hébergé par {space.user?.name || "Hôte"}
                 </h2>
                 <p className="text-muted-foreground">
-                  {space.max_guests} voyageurs · {space.bedrooms} chambres · {space.bathrooms} salles de bain
+                  {space.max_guests} voyageurs · {space.bedrooms} chambres ·{" "}
+                  {space.bathrooms} salles de bain
                 </p>
               </div>
               <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-xl">
-                {space.user?.name?.charAt(0).toUpperCase() || 'H'}
+                {space.user?.name?.charAt(0).toUpperCase() || "H"}
               </div>
             </div>
 
             {/* Description */}
             <div className="py-6 border-b border-border">
-              <h3 className="font-semibold text-xl mb-4">À propos de ce logement</h3>
+              <h3 className="font-semibold text-xl mb-4">
+                À propos de ce logement
+              </h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
                 {space.description}
               </p>
@@ -379,21 +567,31 @@ export function SpaceDetailPage() {
 
                 <div className="space-y-6">
                   {space.reviews.slice(0, 3).map((review) => (
-                    <div key={review.id} className="border-b border-border pb-6 last:border-0">
+                    <div
+                      key={review.id}
+                      className="border-b border-border pb-6 last:border-0"
+                    >
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                          {review.user?.name?.charAt(0).toUpperCase() || 'U'}
+                          {review.user?.name?.charAt(0).toUpperCase() || "U"}
                         </div>
                         <div>
                           <h4 className="font-semibold">{review.user?.name}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {format(new Date(review.created_at), 'dd MMMM yyyy', { locale: fr })}
+                            {format(
+                              new Date(review.created_at),
+                              "dd MMMM yyyy",
+                              { locale: fr },
+                            )}
                           </p>
                         </div>
                       </div>
                       <div className="flex gap-1 mb-2">
                         {[...Array(review.rating)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                          <Star
+                            key={i}
+                            className="w-4 h-4 fill-yellow-400 text-yellow-400"
+                          />
                         ))}
                       </div>
                       <p className="text-muted-foreground">{review.comment}</p>
@@ -415,35 +613,43 @@ export function SpaceDetailPage() {
             <div className="sticky top-24">
               <div className="bg-card rounded-2xl border border-border p-6 shadow-xl">
                 <div className="flex items-baseline gap-2 mb-6">
-                  <span className="text-3xl font-bold">{space.price_per_night}€</span>
+                  <span className="text-3xl font-bold">
+                    {space.price_per_night}€
+                  </span>
                   <span className="text-muted-foreground">/ nuit</span>
                 </div>
 
                 <div className="space-y-4 mb-6">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Date d'arrivée</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Date d'arrivée
+                    </label>
                     <input
                       type="date"
                       value={checkIn}
                       onChange={(e) => setCheckIn(e.target.value)}
-                      min={format(new Date(), 'yyyy-MM-dd')}
+                      min={format(new Date(), "yyyy-MM-dd")}
                       className="w-full px-4 py-3 bg-input-background rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Date de départ</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Date de départ
+                    </label>
                     <input
                       type="date"
                       value={checkOut}
                       onChange={(e) => setCheckOut(e.target.value)}
-                      min={checkIn || format(new Date(), 'yyyy-MM-dd')}
+                      min={checkIn || format(new Date(), "yyyy-MM-dd")}
                       className="w-full px-4 py-3 bg-input-background rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Nombre de voyageurs</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Nombre de voyageurs
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -466,7 +672,7 @@ export function SpaceDetailPage() {
                   {bookingLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin mx-auto" />
                   ) : (
-                    'Réserver maintenant'
+                    "Réserver maintenant"
                   )}
                 </button>
 
@@ -482,12 +688,16 @@ export function SpaceDetailPage() {
                     <span>{subtotal.toFixed(2)}€</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Frais de service (10%)</span>
+                    <span className="text-muted-foreground">
+                      Frais de service (10%)
+                    </span>
                     <span>{serviceFee.toFixed(2)}€</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-border font-semibold">
                     <span>Total</span>
-                    <span className="text-blue-600">{totalPrice.toFixed(2)}€</span>
+                    <span className="text-blue-600">
+                      {totalPrice.toFixed(2)}€
+                    </span>
                   </div>
                 </div>
               </div>

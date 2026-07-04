@@ -19,12 +19,52 @@ interface Space {
   space_type: string;
   rating: number;
   review_count: number;
-  images: string[];
+  featured_image: string | null; // Changé de images à featured_image
   max_guests: number;
   bedrooms: number;
   bathrooms: number;
   amenities: string[];
 }
+
+// Fonction pour construire l'URL de l'image (identique à OwnerDashboard)
+const getImageUrl = (path: string | null): string => {
+  if (!path) return '/placeholder.jpg';
+  
+  // Si c'est une URL complète (Unsplash, etc.)
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  
+  // Si le chemin commence déjà par /storage/
+  if (path.startsWith('/storage/')) {
+    return path;
+  }
+  
+  // Si le chemin commence par storage/ (sans slash)
+  if (path.startsWith('storage/')) {
+    return '/' + path;
+  }
+  
+  // Si le chemin commence par /uploads/
+  if (path.startsWith('/uploads/')) {
+    const baseUrl = import.meta.env.VITE_API_URL 
+      ? import.meta.env.VITE_API_URL.replace('/api', '') 
+      : 'http://localhost:8000';
+    return `${baseUrl}${path}`;
+  }
+  
+  // Construction de l'URL pour les images locales
+  const baseUrl = import.meta.env.VITE_API_URL 
+    ? import.meta.env.VITE_API_URL.replace('/api', '') 
+    : 'http://localhost:8000';
+  
+  return `${baseUrl}/storage/${path}`;
+};
+
+// Helper pour le placeholder d'image
+const getPlaceholderImage = (title: string): string => {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=6366f1&color=fff&size=200`;
+};
 
 interface Filters {
   type: string;
@@ -503,19 +543,24 @@ export function SearchPage() {
                   ? 'grid grid-cols-1 md:grid-cols-2 gap-6' 
                   : 'space-y-6'
                 }>
-                  {spaces.map((space) => (
-                    <PropertyCard
-                      key={space.id}
-                      id={space.id}
-                      image={space.images?.[0] || '/placeholder.jpg'}
-                      title={space.title}
-                      location={space.location}
-                      price={space.price_per_night}
-                      rating={space.rating || 0}
-                      reviews={space.review_count || 0}
-                      type={space.space_type}
-                    />
-                  ))}
+                  {spaces.map((space) => {
+                    const imageUrl = getImageUrl(space.featured_image);
+                    const placeholderImage = getPlaceholderImage(space.title);
+                    
+                    return (
+                      <PropertyCard
+                        key={space.id}
+                        id={space.id}
+                        image={imageUrl}
+                        title={space.title}
+                        location={space.location}
+                        price={space.price_per_night}
+                        rating={space.rating || 0}
+                        reviews={space.review_count || 0}
+                        type={space.space_type}
+                      />
+                    );
+                  })}
                 </div>
 
                 {/* Pagination */}
