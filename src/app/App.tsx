@@ -13,6 +13,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ReservationPage } from './pages/ReservationPage';
+import { ReservationDetailsPage } from './pages/ReservationDetails';
 import { CreateSpace } from './pages/CreateSpace';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Chatbot } from './components/Chatbot';
@@ -33,7 +34,7 @@ function App() {
                 <Route path="login" element={<LoginPage />} />
                 <Route path="register" element={<RegisterPage />} />
                 <Route path="reservation/:id" element={<ReservationPage />} />
-                
+
                 {/* Routes protégées (nécessite authentification) */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="dashboard/user" element={<UserDashboard />} />
@@ -41,8 +42,9 @@ function App() {
                   <Route path="dashboard/admin" element={<AdminDashboard />} />
                   <Route path="spaces/create" element={<CreateSpace />} />
                   <Route path="spaces/:id/edit" element={<CreateSpace />} />
+                  <Route path="reservations/:id" element={<ReservationDetailsPage/>} />
                 </Route>
-                
+
                 {/* Route 404 - Page non trouvée */}
                 <Route path="*" element={<NotFoundPage />} />
               </Route>

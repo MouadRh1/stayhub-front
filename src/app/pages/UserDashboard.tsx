@@ -19,7 +19,7 @@ interface Reservation {
     id: string;
     title: string;
     location: string;
-    images: string[];
+    featured_image?: string | null; // corrigé: le backend renvoie featured_image, pas images[]
     price_per_night: number;
   };
   check_in: string;
@@ -36,7 +36,7 @@ interface Favorite {
     id: string;
     title: string;
     location: string;
-    images: string[];
+    featured_image?: string | null; // corrigé: le backend renvoie featured_image, pas images[]
     price_per_night: number;
     rating: number;
     review_count: number;
@@ -52,6 +52,7 @@ interface UserProfile {
   address?: string;
   avatar?: string;
   role: string;
+  created_at?: string;
 }
 
 const TABS = [
@@ -60,6 +61,38 @@ const TABS = [
   { id: 'profile', label: 'Profil', icon: User },
   { id: 'settings', label: 'Paramètres', icon: Settings },
 ];
+
+// Fonction pour construire l'URL de l'image (même logique que OwnerDashboard / SearchPage)
+const getImageUrl = (path: string | null | undefined): string => {
+  if (!path) return '/placeholder.jpg';
+
+  // Si c'est une URL complète (Unsplash, etc.)
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  // Si le chemin commence déjà par /storage/
+  if (path.startsWith('/storage/')) {
+    return path;
+  }
+
+  // Si le chemin commence par storage/ (sans slash)
+  if (path.startsWith('storage/')) {
+    return '/' + path;
+  }
+
+  // Construction de l'URL pour les images locales
+  const baseUrl = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace('/api', '')
+    : 'http://localhost:8000';
+
+  return `${baseUrl}/storage/${path}`;
+};
+
+// Helper pour le placeholder d'image
+const getPlaceholderImage = (title: string): string => {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=6366f1&color=fff&size=200`;
+};
 
 export function UserDashboard() {
   const navigate = useNavigate();
@@ -294,62 +327,70 @@ export function UserDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {reservations.map((booking) => (
-                      <div key={booking.id} className="bg-card rounded-2xl border border-border p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex flex-col md:flex-row gap-6">
-                          <img
-                            src={booking.space?.images?.[0] || '/placeholder.jpg'}
-                            alt={booking.space?.title}
-                            className="w-full md:w-48 h-32 object-cover rounded-xl"
-                          />
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                              <div>
-                                <h3 className="font-semibold text-lg">{booking.space?.title || 'Espace'}</h3>
-                                <div className="flex items-center gap-1 text-muted-foreground text-sm">
-                                  <MapPin className="w-4 h-4" />
-                                  <span>{booking.space?.location || 'Localisation'}</span>
+                    {reservations.map((booking) => {
+                      const imageUrl = getImageUrl(booking.space?.featured_image);
+                      const placeholderImage = getPlaceholderImage(booking.space?.title || 'Espace');
+
+                      return (
+                        <div key={booking.id} className="bg-card rounded-2xl border border-border p-6 hover:shadow-lg transition-shadow">
+                          <div className="flex flex-col md:flex-row gap-6">
+                            <img
+                              src={imageUrl}
+                              alt={booking.space?.title || 'Espace'}
+                              className="w-full md:w-48 h-32 object-cover rounded-xl bg-muted"
+                              onError={(e) => {
+                                e.currentTarget.src = placeholderImage;
+                              }}
+                            />
+                            <div className="flex-1">
+                              <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                                <div>
+                                  <h3 className="font-semibold text-lg">{booking.space?.title || 'Espace'}</h3>
+                                  <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                                    <MapPin className="w-4 h-4" />
+                                    <span>{booking.space?.location || 'Localisation'}</span>
+                                  </div>
+                                </div>
+                                {getStatusBadge(booking.status)}
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Arrivée</p>
+                                  <p className="font-medium">
+                                    {format(new Date(booking.check_in), 'dd MMM yyyy', { locale: fr })}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Départ</p>
+                                  <p className="font-medium">
+                                    {format(new Date(booking.check_out), 'dd MMM yyyy', { locale: fr })}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Voyageurs</p>
+                                  <p className="font-medium">{booking.guests}</p>
                                 </div>
                               </div>
-                              {getStatusBadge(booking.status)}
-                            </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-                              <div>
-                                <p className="text-sm text-muted-foreground">Arrivée</p>
-                                <p className="font-medium">
-                                  {format(new Date(booking.check_in), 'dd MMM yyyy', { locale: fr })}
-                                </p>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-2xl font-bold">{booking.total_price}€</span>
+                                  <span className="text-muted-foreground text-sm ml-2">Total</span>
+                                </div>
+                                <Link
+                                  to={`/reservations/${booking.space?.id}`}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-accent transition-colors"
+                                >
+                                  Voir les détails
+                                  <ChevronRight className="w-4 h-4" />
+                                </Link>
                               </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Départ</p>
-                                <p className="font-medium">
-                                  {format(new Date(booking.check_out), 'dd MMM yyyy', { locale: fr })}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Voyageurs</p>
-                                <p className="font-medium">{booking.guests}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="text-2xl font-bold">{booking.total_price}€</span>
-                                <span className="text-muted-foreground text-sm ml-2">Total</span>
-                              </div>
-                              <Link
-                                to={`/space/${booking.space?.id}`}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-accent transition-colors"
-                              >
-                                Voir les détails
-                                <ChevronRight className="w-4 h-4" />
-                              </Link>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -380,26 +421,30 @@ export function UserDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {favorites.map((favorite) => (
-                      <div key={favorite.id} className="relative group">
-                        <PropertyCard
-                          id={favorite.space?.id || ''}
-                          image={favorite.space?.images?.[0] || '/placeholder.jpg'}
-                          title={favorite.space?.title || 'Espace'}
-                          location={favorite.space?.location || 'Localisation'}
-                          price={favorite.space?.price_per_night || 0}
-                          rating={favorite.space?.rating || 0}
-                          reviews={favorite.space?.review_count || 0}
-                          type={favorite.space?.space_type || 'Appartement'}
-                        />
-                        <button
-                          onClick={() => removeFavorite(favorite.id)}
-                          className="absolute top-3 right-3 p-2 bg-red-500/10 text-red-500 rounded-full hover:bg-red-500/20 transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                    {favorites.map((favorite) => {
+                      const imageUrl = getImageUrl(favorite.space?.featured_image);
+
+                      return (
+                        <div key={favorite.id} className="relative group">
+                          <PropertyCard
+                            id={favorite.space?.id || ''}
+                            image={imageUrl}
+                            title={favorite.space?.title || 'Espace'}
+                            location={favorite.space?.location || 'Localisation'}
+                            price={favorite.space?.price_per_night || 0}
+                            rating={favorite.space?.rating || 0}
+                            reviews={favorite.space?.review_count || 0}
+                            type={favorite.space?.space_type || 'Appartement'}
+                          />
+                          <button
+                            onClick={() => removeFavorite(favorite.id)}
+                            className="absolute top-3 right-3 p-2 bg-red-500/10 text-red-500 rounded-full hover:bg-red-500/20 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -23,6 +23,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<{ success: boolean; errors?: any }>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -61,42 +62,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setUser(null);
+        return;
+      }
+      const response = await api.get('/user');
+      setUser(response.data);
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement:', error);
+      localStorage.removeItem('access_token');
+      setUser(null);
+    }
+  };
+
   const login = async (email: string, password: string) => {
-  try {
-    console.log('📤 Envoi login...');
-    const response = await api.post('/login', { email, password });
-    console.log('📥 Réponse brute:', response);
-    console.log('📥 Response data:', response.data);
-    console.log('📥 Access token:', response.data?.access_token);
-    console.log('📥 User:', response.data?.user);
-    
-    const { access_token, user } = response.data;
-    
-    if (!access_token) {
-      console.error('❌ Aucun token reçu dans la réponse');
+    try {
+      console.log('📤 Envoi login...');
+      const response = await api.post('/login', { email, password });
+      console.log('📥 Response data:', response.data);
+      
+      const { access_token, user } = response.data;
+      
+      if (!access_token) {
+        console.error('❌ Aucun token reçu dans la réponse');
+        return { 
+          success: false, 
+          error: 'Aucun token reçu du serveur' 
+        };
+      }
+      
+      localStorage.setItem('access_token', access_token);
+      console.log('💾 Token sauvegardé');
+      
+      // IMPORTANT: Mettre à jour l'état utilisateur
+      setUser(user);
+      console.log('👤 Utilisateur défini:', user);
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erreur login:', error);
+      console.error('❌ Response:', error.response?.data);
       return { 
         success: false, 
-        error: 'Aucun token reçu du serveur' 
+        error: error.response?.data?.message || 'Email ou mot de passe incorrect'
       };
     }
-    
-    localStorage.setItem('access_token', access_token);
-    console.log('💾 Token sauvegardé:', localStorage.getItem('access_token'));
-    
-    setUser(user);
-    console.log('👤 Utilisateur défini:', user);
-    
-    return { success: true };
-  } catch (error: any) {
-    console.error('❌ Erreur login:', error);
-    console.error('❌ Response:', error.response?.data);
-    console.error('❌ Status:', error.response?.status);
-    return { 
-      success: false, 
-      error: error.response?.data?.message || 'Email ou mot de passe incorrect'
-    };
-  }
-};
+  };
 
   const register = async (data: RegisterData) => {
     try {
@@ -122,8 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       localStorage.removeItem('access_token');
       setUser(null);
-      // Forcer la mise à jour du state
-      setUser(null);
     }
   };
 
@@ -145,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     updateUser,
+    refreshUser,
   };
 
   return (

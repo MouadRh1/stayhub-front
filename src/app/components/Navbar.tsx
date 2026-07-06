@@ -39,6 +39,12 @@ export function Navbar() {
     setIsClient(true);
   }, []);
 
+  // ✅ Log pour debug - Voir quand le navbar se met à jour
+  useEffect(() => {
+    console.log('🔄 Navbar mis à jour - isAuthenticated:', isAuthenticated);
+    console.log('🔄 Navbar mis à jour - user:', user?.name || 'null');
+  }, [isAuthenticated, user]);
+
   // Rafraîchir les notifications quand le dropdown s'ouvre
   useEffect(() => {
     if (notifDropdownOpen && isAuthenticated) {
@@ -63,6 +69,7 @@ export function Navbar() {
   const handleLogout = async () => {
     await logout();
     setUserMenuOpen(false);
+    setNotifDropdownOpen(false);
     navigate('/');
   };
 
@@ -144,6 +151,11 @@ export function Navbar() {
   const handleMarkAsRead = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     await markAsRead(id);
+    // Mettre à jour le compteur localement
+    const updatedNotif = notifications.find(n => n.id === id);
+    if (updatedNotif && !updatedNotif.is_read) {
+      // Le contexte mettra à jour automatiquement
+    }
   };
 
   const handleDeleteNotification = async (id: string, e: React.MouseEvent) => {
@@ -171,7 +183,7 @@ export function Navbar() {
     return format(past, 'dd MMM yyyy', { locale: fr });
   };
 
-  // Afficher un loader pendant le chargement
+  // ✅ Afficher un loader pendant le chargement
   if (loading) {
     return (
       <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
@@ -373,7 +385,7 @@ export function Navbar() {
               </Link>
             )}
 
-            {/* User Menu */}
+            {/* User Menu - ✅ Correction avec vérification plus robuste */}
             {isClient && isAuthenticated && user ? (
               <div className="relative" ref={menuRef}>
                 <button

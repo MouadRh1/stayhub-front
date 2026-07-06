@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { login, isAuthenticated, loading: authLoading, refreshUser } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -54,9 +54,11 @@ export function LoginPage() {
       
       if (result.success) {
         setSuccess('Connexion réussie ! Redirection...');
+        // Rafraîchir les données utilisateur
+        await refreshUser();
         setTimeout(() => {
           navigate('/');
-        }, 1000);
+        }, 500);
       } else {
         setError(result.error || 'Email ou mot de passe incorrect');
       }
@@ -80,6 +82,11 @@ export function LoginPage() {
         <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
       </div>
     );
+  }
+
+  // Si déjà connecté, ne pas afficher la page
+  if (isAuthenticated) {
+    return null;
   }
 
   return (

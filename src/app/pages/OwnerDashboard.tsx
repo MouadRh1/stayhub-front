@@ -30,7 +30,7 @@ interface Property {
 interface Booking {
   id: string;
   user: { name: string };
-  space: { title: string };
+  space: { title: string; featured_image?: string | null }; // ajout de featured_image
   check_in: string;
   check_out: string;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
@@ -79,7 +79,7 @@ const DEFAULT_STATS: DashboardStats = {
 };
 
 // Fonction pour construire l'URL de l'image
-const getImageUrl = (path: string | null): string => {
+const getImageUrl = (path: string | null | undefined): string => {
   if (!path) return '/placeholder.jpg';
   
   // Si c'est une URL complète (Unsplash, etc.)
@@ -437,34 +437,49 @@ export function OwnerDashboard() {
                 Activité récente
               </h3>
               <div className="space-y-4">
-                {bookings.slice(0, 4).map((booking, index) => (
-                  <div key={index} className="flex items-center gap-4 pb-4 border-b border-border last:border-0 hover:bg-accent/30 p-2 rounded-xl transition-colors">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      booking.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-                      booking.status === 'confirmed' ? 'bg-green-100 dark:bg-green-900/30' :
-                      'bg-blue-100 dark:bg-blue-900/30'
-                    }`}>
-                      {booking.status === 'pending' ? (
-                        <Clock className="w-5 h-5 text-yellow-600" />
-                      ) : booking.status === 'confirmed' ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <Calendar className="w-5 h-5 text-blue-600" />
-                      )}
+                {bookings.slice(0, 4).map((booking, index) => {
+                  const imageUrl = getImageUrl(booking.space?.featured_image);
+                  const placeholderImage = getPlaceholderImage(booking.space?.title || 'Espace');
+
+                  return (
+                    <div key={index} className="flex items-center gap-4 pb-4 border-b border-border last:border-0 hover:bg-accent/30 p-2 rounded-xl transition-colors">
+                      <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-muted">
+                        <img
+                          src={imageUrl}
+                          alt={booking.space?.title || 'Espace'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = placeholderImage;
+                          }}
+                        />
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center ring-2 ring-card ${
+                          booking.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
+                          booking.status === 'confirmed' ? 'bg-green-100 dark:bg-green-900/30' :
+                          'bg-blue-100 dark:bg-blue-900/30'
+                        }`}>
+                          {booking.status === 'pending' ? (
+                            <Clock className="w-3 h-3 text-yellow-600" />
+                          ) : booking.status === 'confirmed' ? (
+                            <CheckCircle className="w-3 h-3 text-green-600" />
+                          ) : (
+                            <Calendar className="w-3 h-3 text-blue-600" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">
+                          {booking.status === 'pending' ? 'Nouvelle réservation' : 
+                           booking.status === 'confirmed' ? 'Réservation confirmée' : 
+                           'Réservation terminée'} pour {booking.space?.title || 'un espace'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {booking.user?.name || 'Client'} · {format(new Date(booking.created_at), 'dd MMM yyyy', { locale: fr })}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold">{booking.total_price}€</span>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium">
-                        {booking.status === 'pending' ? 'Nouvelle réservation' : 
-                         booking.status === 'confirmed' ? 'Réservation confirmée' : 
-                         'Réservation terminée'} pour {booking.space?.title || 'un espace'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {booking.user?.name || 'Client'} · {format(new Date(booking.created_at), 'dd MMM yyyy', { locale: fr })}
-                      </p>
-                    </div>
-                    <span className="text-sm font-semibold">{booking.total_price}€</span>
-                  </div>
-                ))}
+                  );
+                })}
                 {bookings.length === 0 && (
                   <p className="text-center text-muted-foreground py-4">Aucune activité récente</p>
                 )}
@@ -632,40 +647,57 @@ export function OwnerDashboard() {
             </div>
 
             <div className="space-y-4">
-              {filteredBookings.map((booking) => (
-                <div key={booking.id} className={`bg-card rounded-2xl border-l-4 ${getStatusColor(booking.status)} border-border p-6 hover:shadow-lg transition-shadow`}>
-                  <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-                    <div>
-                      <h3 className="font-semibold text-lg">{booking.space?.title || 'Espace'}</h3>
-                      <p className="text-muted-foreground">Client: {booking.user?.name || 'Inconnu'}</p>
-                    </div>
-                    {getStatusBadge(booking.status)}
-                  </div>
+              {filteredBookings.map((booking) => {
+                const imageUrl = getImageUrl(booking.space?.featured_image);
+                const placeholderImage = getPlaceholderImage(booking.space?.title || 'Espace');
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Arrivée</p>
-                      <p className="font-medium">
-                        {booking.check_in ? format(new Date(booking.check_in), 'dd MMM yyyy', { locale: fr }) : '-'}
-                      </p>
+                return (
+                  <div key={booking.id} className={`bg-card rounded-2xl border-l-4 ${getStatusColor(booking.status)} border-border p-6 hover:shadow-lg transition-shadow`}>
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={booking.space?.title || 'Espace'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = placeholderImage;
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg">{booking.space?.title || 'Espace'}</h3>
+                          <p className="text-muted-foreground">Client: {booking.user?.name || 'Inconnu'}</p>
+                        </div>
+                      </div>
+                      {getStatusBadge(booking.status)}
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Départ</p>
-                      <p className="font-medium">
-                        {booking.check_out ? format(new Date(booking.check_out), 'dd MMM yyyy', { locale: fr }) : '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Voyageurs</p>
-                      <p className="font-medium">{booking.guests || 1}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Montant</p>
-                      <p className="font-bold text-lg">{booking.total_price}€</p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Arrivée</p>
+                        <p className="font-medium">
+                          {booking.check_in ? format(new Date(booking.check_in), 'dd MMM yyyy', { locale: fr }) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Départ</p>
+                        <p className="font-medium">
+                          {booking.check_out ? format(new Date(booking.check_out), 'dd MMM yyyy', { locale: fr }) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Voyageurs</p>
+                        <p className="font-medium">{booking.guests || 1}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Montant</p>
+                        <p className="font-bold text-lg">{booking.total_price}€</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {filteredBookings.length === 0 && (
                 <div className="text-center py-12 bg-card rounded-2xl border border-border">
